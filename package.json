@@ -4,18 +4,16 @@
   "main": "dist/index.js",
   "scripts": {
     "lint": "standardx -v \"./**/*.ts\"",
-    "build-tests": "esbuild test/*.ts --platform=node --format=esm --outdir=test --keep-names",
-    "test": "npm run build && npm run build-tests && NODE_ENV=test node ./test/index.js | tap-arc",
+    "test": "npm run build && esbuild test/index.ts --platform=node --format=esm --keep-names --bundle | node --input-type=module | tap-arc",
     "build-cjs": "esbuild src/*.ts --tsconfig=tsconfig.build.json --format=cjs --keep-names --outdir=./dist --out-extension:.js=.cjs",
     "build": "mkdir -p ./dist && rm -rf ./dist/* && npm run build-cjs && tsc --project tsconfig.build.json",
     "preversion": "npm run lint",
     "postversion": "git push && git push --tags && npm publish",
     "prepublishOnly": "npm run build"
   },
-  "dependencies": {
-  },
   "devDependencies": {
-    "@socketsupply/tapzero": "^0.7.1",
+    "@socketsupply/tapzero": "^0.8.0",
+    "@typescript-eslint/eslint-plugin": "^6.7.3",
     "@typescript-eslint/parser": "^5.55.0",
     "esbuild": "^0.15.18",
     "standardx": "^7.0.0",
