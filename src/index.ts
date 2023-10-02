@@ -43,7 +43,7 @@ function startBatch() {
 	batchDepth++;
 }
 
-function endBatch() {
+async function endBatch() {
 	if (batchDepth > 1) {
 		batchDepth--;
 		return;
@@ -63,7 +63,7 @@ function endBatch() {
 			effect._nextBatchedEffect = undefined;
 			effect._flags &= ~NOTIFIED;
 
-			if (!(effect._flags & DISPOSED) && needsToRecompute(effect)) {
+			if (!(effect._flags & DISPOSED) && await needsToRecompute(effect)) {
 				try {
 					effect._callback();
 				} catch (err) {
@@ -226,7 +226,7 @@ declare class Signal<T = any> {
 	constructor(value?: T);
 
 	/** @internal */
-	_refresh(): boolean;
+	_refresh(): Promise<boolean>;
 
 	/** @internal */
 	_subscribe(node: Node): void;
@@ -262,7 +262,7 @@ function Signal(this: Signal, value?: unknown) {
 Signal.prototype.brand = identifier;
 
 Signal.prototype._refresh = function () {
-	return true;
+	return Promise.resolve(true);
 };
 
 Signal.prototype._subscribe = function (node) {
@@ -366,7 +366,7 @@ function signal<T>(value: T): Signal<T> {
 	return new Signal(value);
 }
 
-function needsToRecompute(target: Computed | Effect): boolean {
+async function needsToRecompute(target: Computed | Effect): Promise<boolean> {
 	// Check the dependencies for changed values. The dependency list is already
 	// in order of use. Therefore if multiple dependencies have changed values, only
 	// the first used dependency is re-evaluated at this point.
@@ -380,7 +380,7 @@ function needsToRecompute(target: Computed | Effect): boolean {
 		// dependency cycle), then we need to recompute.
 		if (
 			node._source._version !== node._version ||
-			!node._source._refresh() ||
+			!(await node._source._refresh()) ||
 			node._source._version !== node._version
 		) {
 			return true;
@@ -500,7 +500,7 @@ function Computed(this: Computed, compute: () => unknown) {
 
 Computed.prototype = new Signal() as Computed;
 
-Computed.prototype._refresh = function () {
+Computed.prototype._refresh = async function () {
 	this._flags &= ~NOTIFIED;
 
 	if (this._flags & RUNNING) {
@@ -523,7 +523,7 @@ Computed.prototype._refresh = function () {
 	// Mark this computed signal running before checking the dependencies for value
 	// changes, so that the RUNNING flag can be used to notice cyclical dependencies.
 	this._flags |= RUNNING;
-	if (this._version > 0 && !needsToRecompute(this)) {
+	if (this._version > 0 && !(await needsToRecompute(this))) {
 		this._flags &= ~RUNNING;
 		return true;
 	}
@@ -532,7 +532,14 @@ Computed.prototype._refresh = function () {
 	try {
 		prepareSources(this);
 		evalContext = this;
-		const value = this._compute();
+		// const value = this._compute();
+
+        let value;
+		const maybeP = (value = this._compute());
+		if (maybeP && typeof maybeP.then === "function") {
+			value = await maybeP;
+		}
+
 		if (
 			this._flags & HAS_ERROR ||
 			this._value !== value ||
@@ -605,8 +612,8 @@ Computed.prototype._notify = function () {
 	}
 };
 
-Computed.prototype.peek = function () {
-	if (!this._refresh()) {
+Computed.prototype.peek = async function () {
+	if (!(await this._refresh())) {
 		cycleDetected();
 	}
 	if (this._flags & HAS_ERROR) {
